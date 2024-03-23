@@ -1,0 +1,38 @@
+$TTL 2d
+
+$ORIGIN dev-o.de.
+
+@               IN      SOA     ns.dev-o.de. info.dev-o.de. (
+                                2023050103      ; serial
+                                12h             ; refresh
+                                15m             ; retry
+                                3w              ; expire
+                                2h              ; minimum ttl
+                                )
+
+                IN      NS      ns.dev-o.de.
+
+ns              IN      A       192.168.0.110
+
+; -- add dns records below
+win.dev-o.de.       IN      A       192.168.0.244
+pro.dev-o.de.       IN      A       192.168.0.222
+km1.dev-o.de.       IN      A       192.168.0.111
+dev-o.de.           IN      A       192.168.0.110
+km0.dev-o.de.       IN      A       192.168.0.110
+nginx.dev-o.de.     IN      A       192.168.0.110
+portainer.dev-o.de. IN      A       192.168.0.110   
+proxmox.dev-o.de.   IN      A       192.168.0.110   
+argocd.dev-o.de.    IN      A       192.168.0.110   
+rancher.dev-o.de.   IN      A       192.168.0.110
+
+; -- k8s servers
+
+node1  IN      A       192.168.0.11
+node1  IN      A       192.168.0.211
+node2  IN      A       192.168.0.12
+node3  IN      A       192.168.0.13
+node4  IN      A       192.168.0.14
+node5  IN      A       192.168.0.15
+node6  IN      A       192.168.0.16
+

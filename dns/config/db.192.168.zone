@@ -1,0 +1,24 @@
+$TTL    604800
+@       IN      SOA     km0.dev-o.de. admin.ns.dev-o.de. (
+                              3 ; Serial
+                         604800 ; Refresh
+                          86400 ; Retry
+                        2419200 ; Expire
+                         604800 ; Negative Cache TTL
+)
+; name servers
+@ IN NS km0.dev-o.de.
+
+; PTR Records
+110     IN      PTR     dev-o.de.            ;192.168.0.110
+110     IN      PTR     km0.dev-o.de.        ;192.168.0.110
+111     IN      PTR     km1.dev-o.de.        ;192.168.0.111
+222     IN      PTR     pro.dev-o.de.        ;192.168.0.110
+244     IN      PTR     win.dev-o.de.        ;192.168.0.110
+11      IN      PTR     node1.dev-o.de.      ; 192.168.0.11
+211     IN      PTR     node1.dev-o.de.      ; 192.168.0.211
+12      IN      PTR     node2.dev-o.de.      ; 192.168.0.12
+13      IN      PTR     node3.dev-o.de.      ; 192.168.0.13
+14      IN      PTR     node4.dev-o.de.      ; 192.168.0.14
+15      IN      PTR     node5.dev-o.de.      ; 192.168.0.15
+16      IN      PTR     node6.dev-o.de.      ; 192.168.0.16
