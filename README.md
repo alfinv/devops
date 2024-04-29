@@ -1,8 +1,9 @@
-AWS regions  not guaranteed to work without any modification:
+AWS regions should work without any modification:
 
 us-west-2
 eu-west-1
-### Cloudshell
+
+### Cloudshell [(link)(https://eu-west-1.console.aws.amazon.com/cloudshell/home?region=eu-west-1#)]
 
 ```
 wget -q https://raw.githubusercontent.com/aws-samples/
@@ -27,7 +28,7 @@ The AWS CLI is already installed and will assume the credentials attached to the
 aws sts get-caller-identity
 ```
 
-### Cloud9
+###  => Cloud9
 #### The eksctl utility has been pre-installed in your Amazon Cloud9 Environment, so we can immediately create the cluster. 
 
 - Create a VPC across three availability zones
@@ -45,6 +46,19 @@ This generally takes 20 minutes.
 ```
 use-cluster $EKS_CLUSTER_NAME
 ```
+### => or using  Teraform
+```
+git clone https://github.com/alfinv/devops.git
+cd devops/environment/terraform/
+
+export EKS_CLUSTER_NAME=eks-workshop
+terraform init
+terraform apply -var="cluster_name=$EKS_CLUSTER_NAME" -auto-approve
+
+use-cluster $EKS_CLUSTER_NAME
+
+```
+
 #### Setup LoadBalancer:
 1. Install the AWS Load Balancer Controller in the Amazon EKS cluster
      - This Service will create a Network Load Balancer that listens on port 80 and forwards connections to the ui Pods on port 8080. An NLB is a layer 4 load balancer that on our case operates at the TCP layer.
@@ -224,19 +238,21 @@ spec:
                   number: 80
 ```
 ```sh
-
 kubectl apply -k ~/environment/eks-workshop/modules/exposing/ingress/multiple-ingress
 
 kubectl get ingress -l app.kubernetes.io/created-by=eks-workshop -A
 
-
 kubectl get ingress -n ui ui -o jsonpath="{.status.loadBalancer.ingress[*].hostname}{'\n'}"
-
-
 ```
 
 
 [![Resou8rce map application ](https://github.com/alfinv/devops/blob/dbab3a9dc12abf14febe17882a2635d863ad153c/img/Resource%20map.png)] 
+
+```sh
+
+ADDRESS=$(kubectl get ingress -n ui ui -o jsonpath="{.status.loadBalancer.ingress[*].hostname}{'\n'}")
+curl $ADDRESS/catalogue | jq .
+```
 
 
 ---
@@ -248,7 +264,18 @@ Cloud 9:
 
     eksctl delete cluster $EKS_CLUSTER_NAME --wait
 ```
+Terraform :
+```
+    cd ~/devops/terraform
+    terraform destroy -var="cluster_name=$EKS_CLUSTER_NAME" -auto-approve
+```
+
 CloudShell:
 ```
     aws cloudformation delete-stack --stack-name eks-workshop-ide
 ```
+ ### Other
+ ```
+ ssh-keygen -t ed25519 -C "your_email@example.com"
+ ssh-add ~/.ssh/id_ed25519
+ ```
