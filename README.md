@@ -58,8 +58,21 @@ terraform apply -var="cluster_name=$EKS_CLUSTER_NAME" -auto-approve
 use-cluster $EKS_CLUSTER_NAME
 
 ```
+## Start app
+```
+
+kubectl apply -k ~/environment/eks-workshop/base-application
+
+kubectl -n catalog exec -it \
+  deployment/catalog -- curl catalog.catalog.svc/catalogue | jq .
+```
+
+
 
 #### Setup LoadBalancer:
+
+
+expose an application running in the EKS cluster to the Internet using a **layer 4** !!! Network Load Balancer. (NLB)
 1. Install the AWS Load Balancer Controller in the Amazon EKS cluster
      - This Service will create a Network Load Balancer that listens on port 80 and forwards connections to the ui Pods on port 8080. An NLB is a layer 4 load balancer that on our case operates at the TCP layer.
 
@@ -149,6 +162,7 @@ aws elbv2 describe-target-health --target-group-arn $TARGET_GROUP_ARN
     ...            
 ```
 ### Ingress
+Application Load Balancer (ALB) is a popular AWS service that load balances incoming traffic at the application layer **(layer 7 !!!)** across multiple targets, such as Amazon EC2 instances, in a region.
 ```sh
 prepare-environment exposing/ingress
 
@@ -244,7 +258,9 @@ kubectl get ingress -l app.kubernetes.io/created-by=eks-workshop -A
 
 kubectl get ingress -n ui ui -o jsonpath="{.status.loadBalancer.ingress[*].hostname}{'\n'}"
 ```
-
+EC2 >>
+Load balancers >>
+k8s-retailappgroup-085b071a94 :
 
 [![Resou8rce map application ](https://github.com/alfinv/devops/blob/dbab3a9dc12abf14febe17882a2635d863ad153c/img/Resource%20map.png)] 
 
@@ -254,6 +270,84 @@ ADDRESS=$(kubectl get ingress -n ui ui -o jsonpath="{.status.loadBalancer.ingres
 curl $ADDRESS/catalogue | jq .
 ```
 
+## EBS
+Elastic Block Store is an easy-to-use, scalable, high-performance block-storage service. It provides persistent volume (non-volatile storage) to users. Persistent storage enables users to store their data until they decide to delete the data.
+
+###  1.  StatefulSets
+ - maintain a sticky identity for each of its Pods
+ - Stable, unique network identifiers
+  - Stable, persistent storage
+  - Ordered, graceful deployment and scaling
+  - Ordered, automated rolling updates
+
+StatefulSet already deployed as part of the Catalog microservice - utilizes a MySQL database
+```
+kubectl describe statefulset -n catalog catalog-mysql
+```
+```yaml
+ Mounts:
+      /var/lib/mysql from data (rw)
+  Volumes:
+   data:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)*
+ - * When a Pod is removed from a node for any reason, the data in the emptyDir is deleted permanently.
+```
+### 2. EBS CSI Driver
+The Kubernetes Container Storage Interface (CSI) helps you run stateful containerized applications. CSI drivers provide a CSI interface that allows Kubernetes clusters to manage the lifecycle of persistent volumes.
+
+Manage the Amazon EBS CSI driver as an Amazon EKS add-on. The IAM role needed by the addon was created for us so we can go ahead and install the addon:
+```sh
+
+aws eks create-addon --cluster-name $EKS_CLUSTER_NAME --addon-name aws-ebs-csi-driver \
+  --service-account-role-arn $EBS_CSI_ADDON_ROLE
+aws eks wait addon-active --cluster-name $EKS_CLUSTER_NAME --addon-name aws-ebs-csi-driver
+
+
+kubectl get daemonset ebs-csi-node -n kube-system
+
+```
+We also already have our StorageClass object configured using Amazon EBS GP2 volume type. Run the following command to confirm:
+```sh
+kubectl get storageclass
+```
+
+#### 3.  modifying the MySQL DB StatefulSet of the catalog microservice to utilize a EBS block store volume as the persistent storage for the database files using k8s pv provisioning
+Create a **new** StatefulSet for the MySQL  - in existing StatefulSet fields we need to update are immutable and cannot be changed.
+```sh
+
+kubectl apply -k ~/environment/eks-workshop/modules/fundamentals/storage/ebs/
+kubectl rollout status --timeout=100s statefulset/catalog-mysql-ebs -n catalog
+
+kubectl get statefulset -n catalog catalog-mysql-ebs
+
+
+kubectl get pv | grep -i catalog
+```
+use aws cli to check the Amazon EBS volume that got created automatically for us:
+```sh 
+aws ec2 describe-volumes \
+    --filters Name=tag:kubernetes.io/created-for/pvc/name,Values=data-catalog-mysql-ebs-0 \
+    --query "Volumes[*].{ID:VolumeId,Tag:Tags}" \
+    --no-cli-pager
+```
+EC2 Volumes: [link (https://eu-west-1.console.aws.amazon.com/ec2/home?region=eu-west-1#Volumes:)]
+
+Check mounting in container -  disk that is currently being mounted on the */var/lib/mysql*. This is the EBS Volume for the stateful MySQL database files that being stored in a persistent way.
+```sh
+ kubectl exec catalog-mysql-ebs-0  -n catalog -- bash -c "df -h"
+```
+```js
+Filesystem      Size  Used Avail Use% Mounted on
+overlay         100G  7.6G   93G   8% /
+tmpfs            64M     0   64M   0% /dev
+tmpfs           3.8G     0  3.8G   0% /sys/fs/cgroup
+/dev/nvme0n1p1  100G  7.6G   93G   8% /etc/hosts
+shm              64M     0   64M   0% /dev/shm
+/dev/nvme1n1     30G  211M   30G   1% /var/lib/mysql
+tmpfs           7.0G   12K  7.0G   1% /run/secrets/kubernetes.io/serviceaccount
+tmpfs           3.8G     0  3.8G   0% /proc/acpi
+tmpfs           3.8G     0  3.8G   0% /sys/firmware
+```
 
 ---
 ## Cleaning Up
