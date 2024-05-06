@@ -35,11 +35,16 @@ aws sts get-caller-identity
 - Create an IAM OIDC provider
 - Add a managed node group named default
 - Configure the VPC CNI to use prefix delegation
-```
+```sh
 export EKS_CLUSTER_NAME=eks-workshop
 
 curl -fsSL https://raw.githubusercontent.com/aws-samples/eks-workshop-v2/stable/cluster/eksctl/cluster.yaml | \
 envsubst | eksctl create cluster -f -
+```
+or edit type of instances befarre apply it
+```sh
+curl -fsSL https://raw.githubusercontent.com/aws-samples/eks-workshop-v2/stable/cluster/eksctl/cluster.yaml --output cluster.yaml && vim cluster.yaml
+cat cluster.yaml | envsubst | eksctl create cluster -f -
 ```
 This generally takes 20 minutes.
 ```
@@ -48,7 +53,7 @@ use-cluster $EKS_CLUSTER_NAME
 ### => or using  Teraform
 ```
 git clone https://github.com/alfinv/devops.git
-cd devops/environment/terraform/
+cd devops/terraform
 
 export EKS_CLUSTER_NAME=eks-workshop
 terraform init
@@ -60,7 +65,9 @@ use-cluster $EKS_CLUSTER_NAME
 ## Start app
 ```
 
-kubectl apply -k ~/environment/eks-workshop/base-application
+prepare-environment introduction/getting-started
+
+kubectl apply -k ~/ironment/eks-workshop/base-application
 
 kubectl -n catalog exec -it \
   deployment/catalog -- curl catalog.catalog.svc/catalogue | jq .
@@ -296,6 +303,10 @@ The Kubernetes Container Storage Interface (CSI) helps you run stateful containe
 
 Manage the Amazon EBS CSI driver as an Amazon EKS add-on. The IAM role needed by the addon was created for us so we can go ahead and install the addon:
 ```sh
+#Create the IAM role needed for the EBS CSI driver addon
+prepare-environment fundamentals/storage/ebs
+#or use terraform ro role creation: cd ~/environment/devops/terraform-csi-irole ; terraform init; terraform plan
+# terraform apply -auto-approve
 
 aws eks create-addon --cluster-name $EKS_CLUSTER_NAME --addon-name aws-ebs-csi-driver \
   --service-account-role-arn $EBS_CSI_ADDON_ROLE
@@ -303,8 +314,11 @@ aws eks wait addon-active --cluster-name $EKS_CLUSTER_NAME --addon-name aws-ebs-
 
 
 kubectl get daemonset ebs-csi-node -n kube-system
-
 ```
+It cold be perform manuaauly: EKS>Clusters>eks-workshop on tab Add-ons button: "Get more add-ons"
+[![addons](https://github.com/alfinv/devops/blob/74e6dced61dec1a32d5eba0a88868fb0d9c87f0b/img/AddonsEKS.png)]
+instead 
+
 We also already have our StorageClass object configured using Amazon EBS GP2 volume type. Run the following command to confirm:
 ```sh
 kubectl get storageclass
