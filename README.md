@@ -362,6 +362,86 @@ tmpfs           3.8G     0  3.8G   0% /proc/acpi
 tmpfs           3.8G     0  3.8G   0% /sys/firmware
 ```
 
+## EFS
+
+```sh
+#Create an IAM role for the Amazon EFS CSI driver
+#Create an Amazon EFS file system
+prepare-environment fundamentals/storage/efs
+```
+Amazon Elastic File System is a simple, serverless, set-and-forget elastic file system for use with AWS Cloud services and on-premises resources. It's built to scale on demand to petabytes without disrupting applications, growing and shrinking automatically as you add and remove files, eliminating the need to provision and manage capacity to accommodate growth
+Assets component is a container which serves static images for products, these product images are added as part of the container image build. 
+Goal: we'll utilize EFS File System and Kubernetes Persistent Volume to update **old product images** and add **new product images** without the need to rebuild the containers images.
+[(https://github.com/alfinv/devops/blob/e76e31c7d6c78ecbc9db8f87bebe71eedd56a772/img/EFS.png)]
+The container has some initial product images copied to it as part of the container build under the folder /usr/share/nginx/html/assets, we can check by running the below command:
+```sh
+kubectl exec --stdin deployment/assets -n assets -- bash -c "ls /usr/share/nginx/html/assets/"
+```
+In order to utilize Amazon EFS file system with dynamic provisioning on our EKS cluster, we need to confirm that we have the EFS CSI Driver installed. 
+```sh
+
+aws eks create-addon --cluster-name $EKS_CLUSTER_NAME --addon-name aws-efs-csi-driver \
+  --service-account-role-arn $EFS_CSI_ADDON_ROLE
+aws eks wait addon-active --cluster-name $EKS_CLUSTER_NAME --addon-name aws-efs-csi-driver
+```
+[(https://github.com/alfinv/devops/blob/e8561bc6ad882130f300d9d09d13a15d8254f21b/img/efscsiriver.png)]
+```sh
+
+kubectl get daemonset efs-csi-node -n kube-system
+
+export EFS_ID=$(aws efs describe-file-systems --query "FileSystems[?Name=='$EKS_CLUSTER_NAME-efs-assets'] | [0].FileSystemId" --output text)
+echo $EFS_ID
+
+```
+The EFS CSI driver supports dynamic and static provisioning.
+We have provisioned an EFS file system, mount targets and the required security group pre-provisioned with an inbound rule that allows inbound NFS traffic for your Amazon EFS mount points
+```sh
+
+kubectl kustomize ~/environment/eks-workshop/modules/fundamentals/storage/efs/storageclass \
+  | envsubst | kubectl apply -f-
+
+kubectl get storageclass
+kubectl describe sc efs-sc
+# NAME            PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+# efs-sc          efs.csi.aws.com         Delete          Immediate              false                  9s
+```
+Last step - We'll also modify the assets service in two ways:
+
+1. Create PVC and mount the PVC to the location where the assets images are stored
+2. Add an init container to **copy** the initial images to the EFS volume
+   - Kustomize patch ~/environment/eks-workshop/modules/fundamentals/storage/efs/deployment/deployment.yaml
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assets
+spec:
+  replicas: 2
+  template:
+    spec:
+      initContainers:
+        - name: copy
+          image: "public.ecr.aws/aws-containers/retail-store-sample-assets:0.4.0"
+          command:
+            ["/bin/sh", "-c", "cp -R /usr/share/nginx/html/assets/* /efsvolume"]
+          volumeMounts:
+            - name: efsvolume
+              mountPath: /efsvolume
+      containers:
+        - name: assets
+          volumeMounts:
+            - name: efsvolume
+              mountPath: /usr/share/nginx/html/assets
+      volumes:
+        - name: efsvolume
+          persistentVolumeClaim:
+            claimName: efs-claim
+```
+```sh
+
+kubectl apply -k ~/environment/eks-workshop/modules/fundamentals/storage/efs/deployment
+kubectl rollout status --timeout=130s deployment/assets -n assets
+```
 ---
 ## Cleaning Up
 
